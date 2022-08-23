@@ -99,7 +99,7 @@ class MockDevice(object):
         # we can probably ignore whitespace,
         # even though a modem never would
         cmd = cmd.strip()
-        
+
         # if this command looks like an AT+SOMETHING=VAL string (which most
         # do), check for an at_something method to handle the command. this
         # is bad, since mock modems should handle as little as possible (and
@@ -108,7 +108,7 @@ class MockDevice(object):
         m = re.match(r"^AT\+([A-Z]+)=(.+)$", cmd)
         if m is not None:
             key, val = m.groups()
-            method = "at_%s" % key.lower()
+            method = f"at_{key.lower()}"
 
             # if the value is wrapped in "quotes", remove
             # them. this is sloppy, but we're only mocking
@@ -126,8 +126,7 @@ class MockDevice(object):
         # or ERROR (if the method returns None or False)
         m = re.match(r"^AT\+([A-Z]+)\?$", cmd)
         if m is not None:
-            method = "at_%s_query" %\
-                m.group(0).lower()
+            method = f"at_{m[0].lower()}_query"
 
             if hasattr(self, method):
                 out = getattr(self, method)()
@@ -250,28 +249,26 @@ class MockSenderDevice(MockDevice):
 
         # if we are currently writing a message, and
         # ascii 26 (ctrl+z) was hit, it's time to send!
-        if self.recipient:
-            if str[-1] == chr(26):
-                MockDevice.write(self, str[0:-1])
-                self.message.append("".join(self.buf_write))
-                self.buf_write = []
+        if not self.recipient or str[-1] != chr(26):
+            # most of the time, invoke the superclass
+            return MockDevice.write(self, str)
+        MockDevice.write(self, str[:-1])
+        self.message.append("".join(self.buf_write))
+        self.buf_write = []
 
-                # just store this outgoing message to be checked
-                # later on. we're not _really_ sending anything
-                self.sent_messages.append({
-                    "recipient": self.recipient,
-                    "text": "\n".join(self.message)
-                })
+        # just store this outgoing message to be checked
+        # later on. we're not _really_ sending anything
+        self.sent_messages.append({
+            "recipient": self.recipient,
+            "text": "\n".join(self.message)
+        })
 
-                # confirm that the message was
-                # accepted, and clear the state
-                self._output("+CMGS: 1")
-                self.recipient = None
-                self.message = None
-                return self._ok()
-
-        # most of the time, invoke the superclass
-        return MockDevice.write(self, str)
+        # confirm that the message was
+        # accepted, and clear the state
+        self._output("+CMGS: 1")
+        self.recipient = None
+        self.message = None
+        return self._ok()
 
 
     def _process(self, cmd):

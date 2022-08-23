@@ -386,10 +386,8 @@ class GsmModem(object):
         m = re.search(tz_pattern, timestamp)
         if m is not None:
             timestamp = re.sub(tz_pattern, "", timestamp)
-            tz_offset = datetime.timedelta(minutes=int(m.group(0)) * 15)
+            tz_offset = datetime.timedelta(minutes=int(m[0]) * 15)
 
-        # we won't be modifying the output, but
-        # still need an empty timedelta to subtract
         else: tz_offset = datetime.timedelta()
 
         # attempt to parse the (maybe modified) timestamp into
@@ -429,7 +427,7 @@ class GsmModem(object):
             # not a CMT string? add it back into the
             # output (since we're not interested in it)
             # and move on to the next
-            if lines[n][0:5] != "+CMT:":
+            if lines[n][:5] != "+CMT:":
                 output_lines.append(lines[n])
                 n += 1
                 continue
@@ -523,21 +521,21 @@ class GsmModem(object):
         # with a UTF-16 Byte Order Mark, try to decode it
         # into a unicode string
         try:
-            if (len(text) % 4 == 0) and (len(text) > 0):
-                if re.match('^[0-9A-F]+$', text):
+            if (
+                (len(text) % 4 == 0)
+                and (len(text) > 0)
+                and re.match('^[0-9A-F]+$', text)
+            ):
+                # insert a bom if there isn't one
+                bom = text[:4].lower()
+                if bom not in ["fffe", "feff"]:
+                    text = f"feff{text}"
 
-                    # insert a bom if there isn't one
-                    bom = text[:4].lower()
-                    if bom != "fffe" and bom != "feff":
-                        text = "feff" + text
+                # decode the text into a unicode string,
+                # so developers embedding pyGSM need never
+                # experience this confusion and pain
+                text = text.decode("hex").decode("utf-16")
 
-                    # decode the text into a unicode string,
-                    # so developers embedding pyGSM need never
-                    # experience this confusion and pain
-                    text = text.decode("hex").decode("utf-16")
-
-        # oh dear. it looked like hex-encoded utf-16,
-        # but wasn't. who sends a message like that?!
         except:
             pass
 
@@ -834,7 +832,7 @@ class GsmModem(object):
             # (the first argument) from the output
             md = re.match(r'^\+CSCA:\s+"(\+?\d+)",', data)
             if md is not None:
-                return md.group(1)
+                return md[1]
 
         # if we have not returned yet, something
         # went wrong. this modem probably doesn't
@@ -987,7 +985,7 @@ class GsmModem(object):
             # return False for that (so we can test it for boolean
             # equality), or an integer of the signal strength.
             if md is not None:
-                csq = int(md.group(1))
+                csq = int(md[1])
                 return csq if csq < 99 else False
 
         # the response from AT+CSQ couldn't be parsed. return
@@ -1004,8 +1002,8 @@ class GsmModem(object):
         """
 
         while True:
-            csq = self.signal_strength()
-            if csq: return csq
+            if csq := self.signal_strength():
+                return csq
             time.sleep(1)
 
 
@@ -1107,12 +1105,7 @@ class GsmModem(object):
             self._fetch_stored_messages()
 
         # abort if there are no messages waiting
-        if not self.incoming_queue:
-            return None
-
-        # remove the message that has been waiting
-        # longest from the queue, and return it
-        return self.incoming_queue.pop(0)
+        return self.incoming_queue.pop(0) if self.incoming_queue else None
 
 
 

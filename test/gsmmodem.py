@@ -40,15 +40,15 @@ class TestGsmModem(unittest.TestCase):
     def testUnknownOperatorName(self):
         """Unknown or missing operator names return a status string."""
 
+
+
         class MockCopsDevice(MockDevice):
             def process(self, cmd):
 
                 # return a valid +COPS response for AT+COPS?, but error
                 # for other commands (except built-in MockDevice stuff)
-                if cmd == "AT+COPS?":
-                    return self._respond('+COPS: 0')
+                return self._respond('+COPS: 0') if cmd == "AT+COPS?" else False
 
-                return False
 
         device = MockCopsDevice()
         gsm = pygsm.GsmModem(device=device)
